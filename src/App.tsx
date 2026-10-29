@@ -110,7 +110,7 @@ function MainApp() {
         <main
           className={`flex-1 w-full ${
             isMobilePortal
-              ? 'lg:pl-0 p-0 overflow-y-auto bg-[#0b0c0e] no-scrollbar'
+              ? 'lg:pl-0 p-0 overflow-y-auto bg-slate-100 dark:bg-[#0b0c0e] no-scrollbar'
               : 'lg:pl-[18.75rem] px-4 sm:px-6 py-4 overflow-y-auto'
           }`}
         >

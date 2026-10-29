@@ -49,6 +49,10 @@ import {
   PackageCheck,
   Truck,
   Menu,
+  Handshake,
+  FileSignature,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useERP } from '../../context/ERPContext.tsx';
 import { Product, Customer, getCustomerProductPricing, TADAEntry, WarrantyTicket } from '../../types/erp.ts';
@@ -56,7 +60,16 @@ import { ChallanModal } from '../sales/ChallanModal.tsx';
 import { DeliveryOrderModal } from '../sales/DeliveryOrderModal.tsx';
 import { CustomerReceiptModal } from '../sales/CustomerReceiptModal.tsx';
 
-type MobileActiveTab = 'home' | 'order' | 'invoice' | 'reports' | 'customer_add' | 'tada' | 'warranty' | 'attendance';
+type MobileActiveTab =
+  | 'home'
+  | 'order'
+  | 'invoice'
+  | 'reports'
+  | 'customer_add'
+  | 'tada'
+  | 'warranty'
+  | 'attendance'
+  | 'crm_lead_add';
 
 interface MobileSalesPortalProps {
   onBackToERP?: () => void;
@@ -85,7 +98,29 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
     addTADA,
     addWarrantyTicket,
     warrantyTickets,
+    addCRMLead,
+    theme,
+    toggleTheme,
   } = useERP();
+
+  const isDark = theme === 'dark';
+
+  // CRM Agreement Lead Registration State
+  const [crmClientName, setCrmClientName] = useState<string>('');
+  const [crmContactPerson, setCrmContactPerson] = useState<string>('');
+  const [crmPhone, setCrmPhone] = useState<string>('');
+  const [crmEmail, setCrmEmail] = useState<string>('');
+  const [crmChannel, setCrmChannel] = useState<string>('Corporate Fleet');
+  const [crmStage, setCrmStage] = useState<string>('Lead Identified');
+  const [crmExpectedVolume, setCrmExpectedVolume] = useState<number>(50);
+  const [crmDealValue, setCrmDealValue] = useState<number>(1250000);
+  const [crmSpecialDiscount, setCrmSpecialDiscount] = useState<number>(5);
+  const [crmContractTerm, setCrmContractTerm] = useState<number>(12);
+  const [crmClosingDate, setCrmClosingDate] = useState<string>(
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10)
+  );
+  const [crmNotes, setCrmNotes] = useState<string>('');
+  const [crmSubmitting, setCrmSubmitting] = useState<boolean>(false);
 
   // App mode & navigation
   const [deviceFrameMode, setDeviceFrameMode] = useState<boolean>(true);
@@ -653,6 +688,53 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
     setActiveTab('home');
   };
 
+  // Handle Register CRM Agreement Lead Submission
+  const handleSaveCRMLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clientNameClean = crmClientName.trim();
+    if (!clientNameClean) {
+      setBannerNotice('⚠️ Please enter the Client / Organization Name.');
+      return;
+    }
+    setCrmSubmitting(true);
+    try {
+      await addCRMLead({
+        clientName: clientNameClean,
+        companyName: clientNameClean,
+        contactPerson: crmContactPerson.trim() || undefined,
+        phone: crmPhone.trim() || '+880 1700-000000',
+        email: crmEmail.trim() || undefined,
+        channel: crmChannel,
+        stage: crmStage as any,
+        expectedVolumeUnits: Number(crmExpectedVolume) || 10,
+        dealValueBDT: Number(crmDealValue) || 0,
+        estimatedValueBDT: Number(crmDealValue) || 0,
+        agreedSpecialDiscountPercent: Number(crmSpecialDiscount) || 0,
+        contractTermMonths: Number(crmContractTerm) || 12,
+        expectedClosingDate: crmClosingDate,
+        salespersonId: defaultRep.id,
+        salespersonName: defaultRep.name,
+        assignedRepName: defaultRep.name,
+        communicationNotes: crmNotes.trim()
+          ? [{ date: new Date().toISOString().substring(0, 10), author: defaultRep.name, note: crmNotes.trim() }]
+          : [],
+      });
+
+      setBannerNotice(`🤝 CRM Agreement Lead "${clientNameClean}" registered successfully & saved to Database!`);
+      // Reset form
+      setCrmClientName('');
+      setCrmContactPerson('');
+      setCrmPhone('');
+      setCrmEmail('');
+      setCrmNotes('');
+      setActiveTab('home');
+    } catch (err: any) {
+      setBannerNotice(`⚠️ Error saving CRM lead: ${err?.message || 'Please retry'}`);
+    } finally {
+      setCrmSubmitting(false);
+    }
+  };
+
   // Product brands available for filter
   const productBrands = useMemo(() => {
     const set = new Set<string>();
@@ -673,16 +755,16 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
   }, [products, selectedBrandFilter, catalogSearch]);
 
   return (
-    <div className="w-full min-h-screen bg-[#0b0c0e] flex justify-center no-scrollbar">
+    <div className="w-full min-h-screen bg-slate-100 dark:bg-[#0b0c0e] flex justify-center no-scrollbar transition-colors duration-200">
       {/* Standalone Native Mobile App Shell - Edge-to-edge on mobile, max-w-md on desktop */}
-      <div className="w-full max-w-md min-h-screen bg-[#16181d] text-white flex flex-col relative no-scrollbar shadow-2xl sm:border-x sm:border-white/5">
+      <div className="w-full max-w-md min-h-screen bg-slate-50 dark:bg-[#16181d] text-slate-900 dark:text-white flex flex-col relative no-scrollbar shadow-2xl sm:border-x sm:border-slate-200 dark:sm:border-white/5 transition-colors duration-200">
         {/* Native Mobile App Header */}
-        <header className="sticky top-0 z-30 bg-[#121316]/95 backdrop-blur-md px-3.5 py-2.5 flex items-center justify-between border-b border-white/10 select-none">
+        <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#121316]/95 backdrop-blur-md px-3.5 py-2.5 flex items-center justify-between border-b border-slate-200 dark:border-white/10 select-none transition-colors duration-200">
           <div className="flex items-center gap-2">
             {onBackToERP && (
               <button
                 onClick={onBackToERP}
-                className="p-1.5 -ml-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white flex items-center gap-1 text-xs transition-colors border border-white/10"
+                className="p-1.5 -ml-1 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 text-xs transition-colors border border-slate-200 dark:border-white/10 cursor-pointer"
                 title="Back to ERP Dashboard"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -691,18 +773,33 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
             )}
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <h1 className="font-extrabold text-xs tracking-tight text-white uppercase">ENSEC FIELD FORCE</h1>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <h1 className="font-extrabold text-xs tracking-tight text-slate-900 dark:text-white uppercase">ENSEC FIELD FORCE</h1>
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                 SPO
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* White Light Theme & Dark Mode Switcher */}
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1.5 text-xs transition-colors border border-slate-200 dark:border-white/10 shadow-xs cursor-pointer"
+              title={`Switch to ${isDark ? 'White Light' : 'Dark'} Theme`}
+              aria-label={`Switch to ${isDark ? 'White Light' : 'Dark'} Theme`}
+            >
+              {isDark ? (
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+              ) : (
+                <Moon className="w-3.5 h-3.5 text-slate-700" />
+              )}
+              <span className="text-[10px] font-bold hidden xs:inline">{isDark ? 'Light' : 'Dark'}</span>
+            </button>
+
             {onOpenERPMenu && (
               <button
                 onClick={onOpenERPMenu}
-                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white flex items-center gap-1 text-xs transition-colors border border-white/10"
+                className="p-1.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 text-xs transition-colors border border-slate-200 dark:border-white/10 cursor-pointer"
                 title="Open ERP Menu"
               >
                 <Menu className="w-3.5 h-3.5" />
@@ -726,28 +823,28 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
         )}
 
         {/* SCREEN VIEWPORT: Smooth edge-to-edge scrolling with NO visible scrollbar */}
-        <div className="flex-1 w-full flex flex-col bg-[#16181d] pb-24 overflow-y-auto no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex-1 w-full flex flex-col bg-slate-50 dark:bg-[#16181d] pb-24 overflow-y-auto no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden transition-colors">
           {/* ========================================================= */}
           {/* SCREEN 1: HOME SCREEN (Matches Image 2 Screen 1 & Image 1) */}
           {/* ========================================================= */}
           {activeTab === 'home' && (
             <div className="p-4 space-y-4">
               {/* SPO Profile Card */}
-              <div className="p-3.5 rounded-2xl bg-[#1e2026] border border-white/5 space-y-3">
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 space-y-3 shadow-xs">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center font-bold text-white shadow-md text-base relative">
                       <span>AR</span>
-                      <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#1e2026]"></span>
+                      <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white dark:border-[#1e2026]"></span>
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="font-bold text-sm text-white">{defaultRep.name}</h2>
-                        <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                        <h2 className="font-bold text-sm text-slate-900 dark:text-white">{defaultRep.name}</h2>
+                        <span className="px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-500/30">
                           SPO
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                         <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
                         <span>House-9, Mirpur DOHS, Dhaka-1216</span>
                       </p>
@@ -759,14 +856,14 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
                     onClick={() => setActiveTab('attendance')}
-                    className="p-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-emerald-900/40 transition-colors"
+                    className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors shadow-2xs"
                   >
                     <Calendar className="w-3.5 h-3.5" />
                     <span>Attendance</span>
                   </button>
                   <button
                     onClick={() => setActiveTab('attendance')}
-                    className="p-2 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-400 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-900/40 transition-colors"
+                    className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-500/40 text-amber-700 dark:text-amber-400 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors shadow-2xs"
                   >
                     <FileText className="w-3.5 h-3.5" />
                     <span>Leave Apply</span>
@@ -774,11 +871,40 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                 </div>
               </div>
 
+              {/* REGISTER NEW CRM AGREEMENT LEAD BANNER (Institutional / B2B) */}
+              <div
+                onClick={() => setActiveTab('crm_lead_add')}
+                className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-amber-500/15 dark:from-indigo-950/60 dark:via-blue-950/50 dark:to-amber-950/50 border border-indigo-400/40 hover:border-indigo-500/70 dark:border-indigo-500/40 dark:hover:border-indigo-400 flex items-center justify-between cursor-pointer transition-all shadow-xs group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-2xs">
+                    <Handshake className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+                        Register CRM Agreement Lead
+                      </h4>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50">
+                        B2B Deal
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                      Capture corporate lead, battery volume & contract terms
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold text-xs shrink-0 pl-2">
+                  <span>Register</span>
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </div>
+              </div>
+
               {/* Quick Operation Grid (From Screenshot 1 & 2) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs px-1">
-                  <span className="font-bold text-amber-400 uppercase tracking-wider text-[11px]">Field Operations</span>
-                  <span className="text-[10px] text-slate-400">Step 1: Capture • Step 2: Confirm</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider text-[11px]">Field Operations</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Step 1: Capture • Step 2: Confirm</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5">
@@ -788,13 +914,13 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                       setMarketSearch('');
                       setShowMarketModal(true);
                     }}
-                    className="p-4 rounded-2xl bg-[#1e2026] border border-white/5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-[#252830] transition-colors group"
+                    className="p-4 rounded-2xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#252830] transition-colors group shadow-2xs"
                   >
-                    <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-105 transition-transform">
                       <Navigation className="w-6 h-6" />
                     </div>
-                    <span className="text-xs font-semibold text-slate-200">Select Market</span>
-                    <span className="text-[10px] text-amber-400 font-mono -mt-1">{selectedMarket}</span>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">Select Market</span>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-mono -mt-1 font-bold">{selectedMarket}</span>
                   </div>
 
                   {/* Select Customer */}
@@ -803,13 +929,13 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                       setCustomerSearch('');
                       setShowCustomerModal(true);
                     }}
-                    className="p-4 rounded-2xl bg-[#1e2026] border border-cyan-500/20 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-[#252830] hover:border-cyan-500/50 transition-colors group"
+                    className="p-4 rounded-2xl bg-white dark:bg-[#1e2026] border border-cyan-400/30 dark:border-cyan-500/20 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#252830] hover:border-cyan-500 transition-colors group shadow-2xs"
                   >
-                    <div className="w-12 h-12 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center group-hover:scale-105 transition-transform">
                       <Store className="w-6 h-6" />
                     </div>
-                    <span className="text-xs font-semibold text-slate-200">Select Customer</span>
-                    <span className="text-[10px] text-cyan-400 truncate max-w-[120px] -mt-1">{activeCustomer.name}</span>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">Select Customer</span>
+                    <span className="text-[10px] text-cyan-600 dark:text-cyan-400 truncate max-w-[120px] -mt-1 font-bold">{activeCustomer.name}</span>
                   </div>
 
                   {/* Make Visit */}
@@ -831,13 +957,13 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                       });
                       setBannerNotice(`📍 Check-in recorded at "${activeCustomer.name}" with live GPS.`);
                     }}
-                    className="p-4 rounded-2xl bg-[#1e2026] border border-white/5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-[#252830] transition-colors group"
+                    className="p-4 rounded-2xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#252830] transition-colors group shadow-2xs"
                   >
-                    <div className="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-105 transition-transform">
                       <MapPin className="w-6 h-6" />
                     </div>
-                    <span className="text-xs font-semibold text-slate-200">Make Visit</span>
-                    <span className="text-[10px] text-slate-400 -mt-1">Geo-Tagged Check-in</span>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">Make Visit</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 -mt-1">Geo-Tagged Check-in</span>
                   </div>
 
                   {/* Take Order (Highlighted) */}
@@ -846,13 +972,13 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                       setActiveTab('order');
                       setOrderSubStep('catalog');
                     }}
-                    className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/30 border border-amber-500/40 flex flex-col items-center justify-center gap-2 cursor-pointer hover:from-amber-500/30 hover:to-orange-500/40 transition-colors group"
+                    className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/15 to-orange-500/25 dark:from-amber-500/20 dark:to-orange-500/30 border border-amber-400 dark:border-amber-500/40 flex flex-col items-center justify-center gap-2 cursor-pointer hover:from-amber-500/25 hover:to-orange-500/35 transition-colors group shadow-xs"
                   >
-                    <div className="w-12 h-12 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
                       <ShoppingBag className="w-6 h-6" />
                     </div>
-                    <span className="text-xs font-bold text-amber-300">Take Order</span>
-                    <span className="text-[10px] text-amber-200/80 -mt-1">Capture Retailer Order</span>
+                    <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Take Order</span>
+                    <span className="text-[10px] text-amber-800/80 dark:text-amber-200/80 -mt-1">Capture Retailer Order</span>
                   </div>
                 </div>
               </div>
@@ -863,133 +989,141 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                   setCustomerSearch('');
                   setShowCustomerModal(true);
                 }}
-                className="p-3.5 rounded-2xl bg-[#1e2026] border border-white/5 hover:border-cyan-500/40 space-y-2.5 cursor-pointer transition-all group"
+                className="p-3.5 rounded-2xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 hover:border-cyan-500/40 space-y-2.5 cursor-pointer transition-all group shadow-2xs"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-full bg-cyan-600/20 text-cyan-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <div className="w-10 h-10 rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center group-hover:scale-105 transition-transform">
                       <Store className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-xs text-white leading-tight group-hover:text-cyan-300 transition-colors">
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-white leading-tight group-hover:text-cyan-600 dark:group-hover:text-cyan-300 transition-colors">
                         {activeCustomer.name}
                       </h4>
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
                         {activeCustomer.territory || selectedMarket} • {activeCustomer.assignedDistributorName || 'Assigned Distributor'}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-cyan-400">
-                    <span className="text-[10px] text-cyan-400/80 font-medium">Change</span>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <div className="flex items-center gap-1.5 text-cyan-600 dark:text-cyan-400">
+                    <span className="text-[10px] font-semibold">Change</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/5 text-[11px]">
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 dark:border-white/5 text-[11px]">
                   <div>
                     <span className="text-slate-500">Current Month Sales:</span>
-                    <div className="font-bold text-white">৳ 18,500</div>
+                    <div className="font-bold text-slate-900 dark:text-white">৳ 18,500</div>
                   </div>
                   <div>
                     <span className="text-slate-500">Last Month Sales:</span>
-                    <div className="font-bold text-slate-300">৳ 42,000</div>
+                    <div className="font-bold text-slate-700 dark:text-slate-300">৳ 42,000</div>
                   </div>
                 </div>
               </div>
 
               {/* Promo Scheme Banner (From Screenshot 2) */}
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-600/30 via-orange-600/20 to-red-600/20 border border-amber-500/30 flex items-center justify-between">
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-red-500/10 dark:from-amber-600/30 dark:via-orange-600/20 dark:to-red-600/20 border border-amber-400/40 dark:border-amber-500/30 flex items-center justify-between shadow-2xs">
                 <div className="space-y-0.5">
-                  <div className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">Autumn Promo Scheme</div>
-                  <div className="text-xs font-bold text-white">Ensec LiFePO4 Inverter & EV Range</div>
-                  <p className="text-[10px] text-amber-200/80">Order 5+ batteries to unlock ৳50/unit instant retailer scheme</p>
+                  <div className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">Autumn Promo Scheme</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">Ensec LiFePO4 Inverter & EV Range</div>
+                  <p className="text-[10px] text-amber-800/80 dark:text-amber-200/80">Order 5+ batteries to unlock ৳50/unit instant retailer scheme</p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-amber-500/30 flex items-center justify-center text-amber-300 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-300 shrink-0">
                   <Tag className="w-5 h-5" />
                 </div>
               </div>
 
-              {/* Quick Hub Links for all 7 User-Requested Sections */}
+              {/* Quick Hub Links for all Sections including CRM Agreement Lead */}
               <div className="space-y-1.5">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">Quick Actions</div>
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">Quick Actions</div>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-center text-xs">
+                  <button
+                    onClick={() => setActiveTab('crm_lead_add')}
+                    className="p-2.5 rounded-xl bg-white dark:bg-[#1e2026] border border-indigo-400/30 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-[#252830] flex flex-col items-center gap-1 transition-colors shadow-2xs"
+                  >
+                    <FileSignature className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">CRM Lead</span>
+                  </button>
+
                   <button
                     onClick={() => setActiveTab('invoice')}
-                    className="p-2.5 rounded-xl bg-[#1e2026] border border-white/5 hover:bg-[#252830] flex flex-col items-center gap-1"
+                    className="p-2.5 rounded-xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252830] flex flex-col items-center gap-1 transition-colors shadow-2xs"
                   >
-                    <Receipt className="w-4 h-4 text-emerald-400" />
-                    <span className="text-[11px] font-medium text-slate-200">Invoice</span>
+                    <Receipt className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-200">Invoice</span>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('reports')}
-                    className="p-2.5 rounded-xl bg-[#1e2026] border border-white/5 hover:bg-[#252830] flex flex-col items-center gap-1"
+                    className="p-2.5 rounded-xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252830] flex flex-col items-center gap-1 transition-colors shadow-2xs"
                   >
-                    <BarChart3 className="w-4 h-4 text-sky-400" />
-                    <span className="text-[11px] font-medium text-slate-200">Reports</span>
+                    <BarChart3 className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-200">Reports</span>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('customer_add')}
-                    className="p-2.5 rounded-xl bg-[#1e2026] border border-white/5 hover:bg-[#252830] flex flex-col items-center gap-1"
+                    className="p-2.5 rounded-xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252830] flex flex-col items-center gap-1 transition-colors shadow-2xs"
                   >
-                    <PlusCircle className="w-4 h-4 text-amber-400" />
-                    <span className="text-[11px] font-medium text-slate-200">New Retailer</span>
+                    <PlusCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-200">New Retailer</span>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('tada')}
-                    className="p-2.5 rounded-xl bg-[#1e2026] border border-white/5 hover:bg-[#252830] flex flex-col items-center gap-1"
+                    className="p-2.5 rounded-xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252830] flex flex-col items-center gap-1 transition-colors shadow-2xs"
                   >
-                    <Car className="w-4 h-4 text-purple-400" />
-                    <span className="text-[11px] font-medium text-slate-200">TADA</span>
+                    <Car className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-200">TADA</span>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('warranty')}
-                    className="p-2.5 rounded-xl bg-[#1e2026] border border-white/5 hover:bg-[#252830] flex flex-col items-center gap-1"
+                    className="p-2.5 rounded-xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252830] flex flex-col items-center gap-1 transition-colors shadow-2xs"
                   >
-                    <ShieldCheck className="w-4 h-4 text-teal-400" />
-                    <span className="text-[11px] font-medium text-slate-200">Warranty RMA</span>
+                    <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-200">Warranty RMA</span>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('attendance')}
-                    className="p-2.5 rounded-xl bg-[#1e2026] border border-white/5 hover:bg-[#252830] flex flex-col items-center gap-1"
+                    className="p-2.5 rounded-xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252830] flex flex-col items-center gap-1 transition-colors shadow-2xs"
                   >
-                    <UserCheck className="w-4 h-4 text-rose-400" />
-                    <span className="text-[11px] font-medium text-slate-200">Attendance</span>
+                    <UserCheck className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-200">Attendance</span>
                   </button>
                 </div>
               </div>
 
               {/* KPI Summary (Matches Screenshot 2 Bottom) */}
-              <div className="p-3 rounded-2xl bg-[#1e2026] border border-white/5 space-y-2 text-[11px]">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target vs Achievement</div>
-                <div className="grid grid-cols-2 gap-2 text-slate-300">
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 space-y-2 text-[11px] shadow-2xs">
+                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Target vs Achievement</div>
+                <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Today's Order:</span>
-                    <span className="font-bold text-white">৳ 18,500</span>
+                    <span className="font-bold text-slate-900 dark:text-white">৳ 18,500</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Today's Invoice:</span>
-                    <span className="font-bold text-emerald-400">৳ 14,200</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">৳ 14,200</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Target:</span>
-                    <span className="font-bold text-white">৳ 60,000</span>
+                    <span className="font-bold text-slate-900 dark:text-white">৳ 60,000</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Achievement:</span>
-                    <span className="font-bold text-amber-400">৳ 41,200</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">৳ 41,200</span>
                   </div>
                 </div>
-                <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-1.5 overflow-hidden">
                   <div className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full w-[68%] rounded-full"></div>
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>Achieve %: <b className="text-white">68.6%</b></span>
-                  <span>RR (Run Rate): <b className="text-white">1.15</b></span>
+                <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                  <span>Achieve %: <b className="text-slate-900 dark:text-white">68.6%</b></span>
+                  <span>RR (Run Rate): <b className="text-slate-900 dark:text-white">1.15</b></span>
                 </div>
               </div>
             </div>
@@ -2174,14 +2308,266 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
               </div>
             </div>
           )}
+
+          {/* ========================================================= */}
+          {/* SCREEN: REGISTER NEW CRM AGREEMENT LEAD                   */}
+          {/* ========================================================= */}
+          {activeTab === 'crm_lead_add' && (
+            <div className="p-4 space-y-4">
+              {/* Header Navigation */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('home')}
+                  className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Home</span>
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50">
+                    B2B Agreement
+                  </span>
+                </div>
+              </div>
+
+              {/* Title & Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-blue-500/10 to-amber-500/15 dark:from-indigo-950/60 dark:via-blue-950/50 dark:to-amber-950/40 border border-indigo-300 dark:border-indigo-500/30 flex items-center gap-3 shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Handshake className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Register CRM Agreement Lead</h3>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                    Capture institutional clients, annual contract terms & battery volume quotas
+                  </p>
+                </div>
+              </div>
+
+              {/* Form Card */}
+              <form onSubmit={handleSaveCRMLead} className="p-4 rounded-2xl bg-white dark:bg-[#1e2026] border border-slate-200 dark:border-white/5 space-y-3.5 text-xs shadow-xs">
+                {/* Client / Organization Name */}
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
+                    Client / Organization Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Grameenphone Ltd / Square Pharma / Biman Cargo"
+                    value={crmClientName}
+                    onChange={(e) => setCrmClientName(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 text-xs"
+                  />
+                </div>
+
+                {/* Contact Person & Designation */}
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Contact Person & Designation
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Engr. Tanvir Ahmed (AGM - Procurement)"
+                    value={crmContactPerson}
+                    onChange={(e) => setCrmContactPerson(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 text-xs"
+                  />
+                </div>
+
+                {/* Phone & Email */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Mobile Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="+880 1711-000000"
+                      value={crmPhone}
+                      onChange={(e) => setCrmPhone(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="tanvir@company.com"
+                      value={crmEmail}
+                      onChange={(e) => setCrmEmail(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Channel / Sector & Pipeline Stage */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Channel / Sector
+                    </label>
+                    <select
+                      value={crmChannel}
+                      onChange={(e) => setCrmChannel(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500 text-xs"
+                    >
+                      <option value="Corporate & Institutional">Corporate & Institutional</option>
+                      <option value="Telecom & BTS Tower">Telecom & BTS Tower</option>
+                      <option value="Solar EPC & Microgrid">Solar EPC & Microgrid</option>
+                      <option value="OEM / EV Commercial Fleet">OEM / EV Commercial Fleet</option>
+                      <option value="Government & Defense">Government & Defense</option>
+                      <option value="Healthcare / Hospital Backup">Healthcare / Hospital Backup</option>
+                      <option value="Distributor Channel">Distributor Channel</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Pipeline Stage
+                    </label>
+                    <select
+                      value={crmStage}
+                      onChange={(e) => setCrmStage(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500 text-xs"
+                    >
+                      <option value="Lead Captured">Lead Captured</option>
+                      <option value="Requirements Discussion">Requirements Discussion</option>
+                      <option value="Proposal Submitted">Proposal Submitted</option>
+                      <option value="Contract Negotiation">Contract Negotiation</option>
+                      <option value="Agreement Won">Agreement Won</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Expected Volume & Deal Value */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Expected Units (Qty)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="e.g. 20"
+                      value={crmExpectedVolume}
+                      onChange={(e) => setCrmExpectedVolume(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Deal Value (BDT ৳)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 650000"
+                      value={crmDealValue}
+                      onChange={(e) => setCrmDealValue(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 text-xs font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Special Discount % & Contract Term */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Special Discount (%)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={40}
+                      placeholder="e.g. 5"
+                      value={crmSpecialDiscount}
+                      onChange={(e) => setCrmSpecialDiscount(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                      Contract Term
+                    </label>
+                    <select
+                      value={crmContractTerm}
+                      onChange={(e) => setCrmContractTerm(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500 text-xs"
+                    >
+                      <option value={6}>6 Months Pilot</option>
+                      <option value={12}>12 Months (1 Year)</option>
+                      <option value={24}>24 Months (2 Years)</option>
+                      <option value={36}>36 Months (3 Years)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Expected Closing Date */}
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Expected Target Closing Date
+                  </label>
+                  <input
+                    type="date"
+                    value={crmClosingDate}
+                    onChange={(e) => setCrmClosingDate(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500 text-xs"
+                  />
+                </div>
+
+                {/* Notes & Agreement Requirements */}
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Key Discussion Notes & Specs
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Required 48V 100Ah LiFePO4 rack batteries with SNMP card support for telecom BTS sites. Delivery schedule phased monthly."
+                    value={crmNotes}
+                    onChange={(e) => setCrmNotes(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 text-xs resize-none"
+                  />
+                </div>
+
+                {/* Rep Assignment Tag */}
+                <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                  <span>Assigned Field Officer:</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{defaultRep.name} (SPO)</span>
+                </div>
+
+                {/* Submit and Cancel Buttons */}
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="submit"
+                    disabled={crmSubmitting}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Handshake className="w-4 h-4" />
+                    <span>{crmSubmitting ? 'Registering...' : 'Register CRM Agreement Lead'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('home')}
+                    className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
 
         {/* BOTTOM NAVIGATION BAR (Anchored fixed at bottom for mobile viewers) */}
-        <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-[#121316]/95 backdrop-blur-md border-t border-white/10 p-2 flex items-center justify-around text-[10px] font-semibold text-slate-400 select-none shadow-2xl">
+        <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 dark:bg-[#121316]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 p-2 flex items-center justify-around text-[10px] font-semibold text-slate-500 dark:text-slate-400 select-none shadow-2xl transition-colors">
           <button
             onClick={() => setActiveTab('home')}
-            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors ${
-              activeTab === 'home' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+              activeTab === 'home' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Navigation className="w-4 h-4" />
@@ -2193,8 +2579,8 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
               setActiveTab('order');
               setOrderSubStep('catalog');
             }}
-            className={`relative flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors ${
-              activeTab === 'order' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
+            className={`relative flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+              activeTab === 'order' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <ShoppingBag className="w-4 h-4" />
@@ -2208,8 +2594,8 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
 
           <button
             onClick={() => setActiveTab('invoice')}
-            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors ${
-              activeTab === 'invoice' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+              activeTab === 'invoice' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Receipt className="w-4 h-4" />
@@ -2218,8 +2604,8 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
 
           <button
             onClick={() => setActiveTab('reports')}
-            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors ${
-              activeTab === 'reports' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+              activeTab === 'reports' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <BarChart3 className="w-4 h-4" />
@@ -2232,25 +2618,25 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
       {/* MODAL: SELECT CUSTOMER / OUTLET PICKER                    */}
       {/* ========================================================= */}
       {showCustomerModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-[#1a1c22] border border-white/10 p-4 space-y-3.5 shadow-2xl text-white max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in">
+          <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white dark:bg-[#1a1c22] border border-slate-200 dark:border-white/10 p-4 space-y-3.5 shadow-2xl text-slate-900 dark:text-white max-h-[85vh] flex flex-col transition-colors">
             
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shadow-xs">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shadow-xs">
                   <Store className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-white">Select Customer / Outlet</h3>
-                  <p className="text-[11px] text-slate-400">
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Select Customer / Outlet</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     {filteredCustomersList.length} outlets available • Tap to choose
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowCustomerModal(false)}
-                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2264,13 +2650,13 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
                 placeholder="Search by outlet name, owner, phone, route..."
-                className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
+                className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-cyan-500"
                 autoFocus
               />
               {customerSearch && (
                 <button
                   onClick={() => setCustomerSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-1"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white text-xs p-1"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -2279,19 +2665,19 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
 
             {/* Filter by Distributor Dropdown */}
             <div className="relative">
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/40 border border-white/10">
-                <div className="flex items-center gap-1.5 pl-2.5 text-amber-400 shrink-0">
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10">
+                <div className="flex items-center gap-1.5 pl-2.5 text-amber-600 dark:text-amber-400 shrink-0">
                   <Building2 className="w-3.5 h-3.5" />
-                  <span className="text-[11px] font-bold text-slate-400">Distributor:</span>
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Distributor:</span>
                 </div>
                 <div className="relative flex-1">
                   <select
                     value={customerDistributorFilter}
                     onChange={(e) => setCustomerDistributorFilter(e.target.value)}
-                    className="w-full bg-transparent pr-7 py-1.5 text-xs font-semibold text-amber-300 appearance-none cursor-pointer focus:outline-hidden truncate"
+                    className="w-full bg-transparent pr-7 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300 appearance-none cursor-pointer focus:outline-hidden truncate"
                   >
                     {availableDistributorsForFilter.map((d) => (
-                      <option key={d.id} value={d.id} className="bg-slate-900 text-white">
+                      <option key={d.id} value={d.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                         {d.name}
                       </option>
                     ))}
@@ -2301,7 +2687,7 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                 {customerDistributorFilter !== 'All' && (
                   <button
                     onClick={() => setCustomerDistributorFilter('All')}
-                    className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white text-xs mr-1"
+                    className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-xs mr-1 cursor-pointer"
                     title="Clear distributor filter"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -2317,10 +2703,10 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                   <button
                     key={ch}
                     onClick={() => setCustomerChannelFilter(ch)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                       customerChannelFilter === ch
-                        ? 'bg-cyan-500 text-slate-950 font-bold'
-                        : 'bg-black/30 border border-white/5 text-slate-300 hover:bg-black/50'
+                        ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
+                        : 'bg-slate-100 dark:bg-black/30 border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-black/50'
                     }`}
                   >
                     {ch}
@@ -2333,10 +2719,10 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
             <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-0.5 min-h-[220px]">
               {filteredCustomersList.length === 0 ? (
                 <div className="py-10 text-center space-y-2">
-                  <div className="w-12 h-12 rounded-full bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
                     <Store className="w-6 h-6" />
                   </div>
-                  <div className="text-xs font-semibold text-slate-300">No customers found</div>
+                  <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">No customers found</div>
                   <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
                     Try searching with another keyword, distributor, or channel filter.
                   </p>
@@ -2346,7 +2732,7 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                       setCustomerChannelFilter('All');
                       setCustomerDistributorFilter('All');
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-cyan-600/30 text-cyan-300 text-xs font-semibold hover:bg-cyan-600/40"
+                    className="px-3 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-700 dark:text-cyan-300 text-xs font-semibold hover:bg-cyan-600/30 cursor-pointer"
                   >
                     Reset Filters
                   </button>
@@ -2366,7 +2752,7 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                       className={`p-3 rounded-2xl border cursor-pointer transition-all ${
                         isSelected
                           ? 'bg-cyan-500/15 border-cyan-500 shadow-md ring-1 ring-cyan-500/40'
-                          : 'bg-black/30 border-white/5 hover:bg-black/50 hover:border-white/10'
+                          : 'bg-slate-50 dark:bg-black/30 border-slate-200 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-black/50 hover:border-slate-300 dark:hover:border-white/10'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -2375,23 +2761,23 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                             className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs ${
                               isSelected
                                 ? 'bg-cyan-500 text-slate-950 font-bold'
-                                : 'bg-white/5 text-slate-300 border border-white/10'
+                                : 'bg-slate-200 dark:bg-white/5 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-white/10'
                             }`}
                           >
                             {c.name.substring(0, 2).toUpperCase()}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <h4 className="font-bold text-xs text-white truncate max-w-[200px]">
+                              <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate max-w-[200px]">
                                 {c.name}
                               </h4>
-                              <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-white/10 text-slate-300">
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300">
                                 {c.channel || c.customerType || 'Retailer'}
                               </span>
                             </div>
                             
                             {(c.ownerName || c.phone) && (
-                              <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                                 {c.ownerName && <span>{c.ownerName}</span>}
                                 {c.ownerName && c.phone && <span>•</span>}
                                 {c.phone && <span>{c.phone}</span>}
@@ -2400,13 +2786,13 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
 
                             {(c.address || c.territory) && (
                               <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                                <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                                <MapPin className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
                                 <span>{c.address || c.territory}</span>
                               </p>
                             )}
 
                             {c.assignedDistributorName && (
-                              <p className="text-[10px] text-amber-400/80 mt-0.5">
+                              <p className="text-[10px] text-amber-600 dark:text-amber-400/90 mt-0.5 font-medium">
                                 Dist: {c.assignedDistributorName}
                               </p>
                             )}
@@ -2419,12 +2805,12 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                               <Check className="w-3.5 h-3.5" />
                             </span>
                           ) : (
-                            <span className="text-[11px] text-cyan-400 font-semibold group-hover:underline">
+                            <span className="text-[11px] text-cyan-600 dark:text-cyan-400 font-semibold group-hover:underline">
                               Select
                             </span>
                           )}
                           {c.outstandingBalanceBDT ? (
-                            <span className="text-[10px] text-rose-400 font-mono">
+                            <span className="text-[10px] text-rose-500 dark:text-rose-400 font-mono font-medium">
                               Due: ৳{c.outstandingBalanceBDT.toLocaleString()}
                             </span>
                           ) : null}
@@ -2437,13 +2823,13 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
             </div>
 
             {/* Bottom Actions */}
-            <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+            <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-between gap-2">
               <button
                 onClick={() => {
                   setShowCustomerModal(false);
                   setActiveTab('customer_add');
                 }}
-                className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-colors"
+                className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-colors cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Enroll New Retailer</span>
@@ -2457,16 +2843,16 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
       {/* MODAL: SELECT MARKET / BEAT ROUTE                         */}
       {/* ========================================================= */}
       {showMarketModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl bg-[#1a1c22] border border-white/10 p-4 space-y-3.5 shadow-2xl text-white max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in">
+          <div className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl bg-white dark:bg-[#1a1c22] border border-slate-200 dark:border-white/10 p-4 space-y-3.5 shadow-2xl text-slate-900 dark:text-white max-h-[80vh] flex flex-col transition-colors">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-2.5">
               <div className="flex items-center gap-2">
-                <Navigation className="w-4 h-4 text-amber-400" />
-                <h3 className="font-bold text-sm text-white">Select Beat Route / Market</h3>
+                <Navigation className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Select Beat Route / Market</h3>
               </div>
               <button
                 onClick={() => setShowMarketModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2479,7 +2865,7 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                 value={marketSearch}
                 onChange={(e) => setMarketSearch(e.target.value)}
                 placeholder="Search market or route..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500"
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-300 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-500"
               />
             </div>
 
@@ -2494,10 +2880,10 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                       setShowMarketModal(false);
                       setBannerNotice(`📍 Route switched to ${m}`);
                     }}
-                    className={`w-full p-2.5 rounded-xl text-left text-xs font-semibold flex items-center justify-between transition-colors ${
+                    className={`w-full p-2.5 rounded-xl text-left text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
                       isSelected
-                        ? 'bg-amber-500 text-slate-950 font-bold'
-                        : 'bg-black/30 text-slate-200 hover:bg-black/50'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                        : 'bg-slate-100 dark:bg-black/30 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-black/50'
                     }`}
                   >
                     <span>{m}</span>
