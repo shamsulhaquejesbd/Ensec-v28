@@ -774,9 +774,7 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
               <h1 className="font-extrabold text-xs tracking-tight text-slate-900 dark:text-white uppercase">ENSEC FIELD FORCE</h1>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                SPO
-              </span>
+              
             </div>
           </div>
 
@@ -840,9 +838,7 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <h2 className="font-bold text-sm text-slate-900 dark:text-white">{defaultRep.name}</h2>
-                        <span className="px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-500/30">
-                          SPO
-                        </span>
+                        
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                         <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
@@ -871,34 +867,7 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                 </div>
               </div>
 
-              {/* REGISTER NEW CRM AGREEMENT LEAD BANNER (Institutional / B2B) */}
-              <div
-                onClick={() => setActiveTab('crm_lead_add')}
-                className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-blue-500/10 to-amber-500/15 dark:from-indigo-950/60 dark:via-blue-950/50 dark:to-amber-950/50 border border-indigo-400/40 hover:border-indigo-500/70 dark:border-indigo-500/40 dark:hover:border-indigo-400 flex items-center justify-between cursor-pointer transition-all shadow-xs group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-2xs">
-                    <Handshake className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
-                        Register CRM Agreement Lead
-                      </h4>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50">
-                        B2B Deal
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                      Capture corporate lead, battery volume & contract terms
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold text-xs shrink-0 pl-2">
-                  <span>Register</span>
-                  <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
+              
 
               {/* Quick Operation Grid (From Screenshot 1 & 2) */}
               <div className="space-y-2">
