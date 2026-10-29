@@ -149,6 +149,7 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
   const [showCustomerModal, setShowCustomerModal] = useState<boolean>(false);
   const [customerSearch, setCustomerSearch] = useState<string>('');
   const [customerChannelFilter, setCustomerChannelFilter] = useState<string>('All');
+  const [customerDistributorFilter, setCustomerDistributorFilter] = useState<string>('All');
 
   // Market Selection Modal State & Search
   const [showMarketModal, setShowMarketModal] = useState<boolean>(false);
@@ -163,6 +164,31 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
     });
     return ['All', ...Array.from(set)];
   }, [customers]);
+
+  // Distinct distributors for customer filtering dropdown
+  const availableDistributorsForFilter = useMemo(() => {
+    const list: { id: string; name: string }[] = [{ id: 'All', name: 'All Distributors' }];
+    const seen = new Set<string>();
+
+    distributors.forEach((d) => {
+      if (d.name && !seen.has(d.name)) {
+        seen.add(d.name);
+        list.push({ id: d.id, name: d.name });
+      }
+    });
+
+    customers.forEach((c) => {
+      if (c.assignedDistributorName && !seen.has(c.assignedDistributorName)) {
+        seen.add(c.assignedDistributorName);
+        list.push({
+          id: c.assignedDistributorId || c.assignedDistributorName,
+          name: c.assignedDistributorName,
+        });
+      }
+    });
+
+    return list;
+  }, [distributors, customers]);
 
   // Filtered customer list for the customer selection modal
   const filteredCustomersList = useMemo(() => {
@@ -184,9 +210,15 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
         c.channel === customerChannelFilter ||
         c.customerType === customerChannelFilter;
 
-      return matchSearch && matchChannel;
+      const matchDistributor =
+        customerDistributorFilter === 'All' ||
+        c.assignedDistributorId === customerDistributorFilter ||
+        c.assignedDistributorName === customerDistributorFilter ||
+        (distributors.find((d) => d.id === customerDistributorFilter)?.name === c.assignedDistributorName);
+
+      return matchSearch && matchChannel && matchDistributor;
     });
-  }, [customers, customerSearch, customerChannelFilter]);
+  }, [customers, customerSearch, customerChannelFilter, customerDistributorFilter, distributors]);
 
   // Available markets list
   const availableMarkets = useMemo(() => {
@@ -2245,6 +2277,39 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
               )}
             </div>
 
+            {/* Filter by Distributor Dropdown */}
+            <div className="relative">
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/40 border border-white/10">
+                <div className="flex items-center gap-1.5 pl-2.5 text-amber-400 shrink-0">
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span className="text-[11px] font-bold text-slate-400">Distributor:</span>
+                </div>
+                <div className="relative flex-1">
+                  <select
+                    value={customerDistributorFilter}
+                    onChange={(e) => setCustomerDistributorFilter(e.target.value)}
+                    className="w-full bg-transparent pr-7 py-1.5 text-xs font-semibold text-amber-300 appearance-none cursor-pointer focus:outline-hidden truncate"
+                  >
+                    {availableDistributorsForFilter.map((d) => (
+                      <option key={d.id} value={d.id} className="bg-slate-900 text-white">
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                {customerDistributorFilter !== 'All' && (
+                  <button
+                    onClick={() => setCustomerDistributorFilter('All')}
+                    className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white text-xs mr-1"
+                    title="Clear distributor filter"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Channel Filter Chips */}
             {customerChannels.length > 2 && (
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
@@ -2273,12 +2338,13 @@ export const MobileSalesPortal: React.FC<MobileSalesPortalProps> = ({
                   </div>
                   <div className="text-xs font-semibold text-slate-300">No customers found</div>
                   <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                    Try searching with another keyword or channel filter.
+                    Try searching with another keyword, distributor, or channel filter.
                   </p>
                   <button
                     onClick={() => {
                       setCustomerSearch('');
                       setCustomerChannelFilter('All');
+                      setCustomerDistributorFilter('All');
                     }}
                     className="px-3 py-1.5 rounded-lg bg-cyan-600/30 text-cyan-300 text-xs font-semibold hover:bg-cyan-600/40"
                   >
