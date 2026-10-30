@@ -283,6 +283,13 @@ CREATE TABLE IF NOT EXISTS public.sales_orders (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Safe Alter Table migration script for sales orders workflow attributes
+ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS do_number TEXT;
+ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS challan_number TEXT;
+ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS bill_number TEXT;
+ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS po_number TEXT;
+ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS delivery_status TEXT;
+
 -- ============================================================================
 -- 9. TADA CLAIMS TABLE (Field Travel & Daily Allowances)
 -- ============================================================================

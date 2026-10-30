@@ -1028,6 +1028,9 @@ export interface SalesOrder {
   status:
     | 'Booked'
     | 'Submitted'
+    | 'DO Generated'
+    | 'DO Accepted'
+    | 'Challan Generated'
     | 'Approved'
     | 'Dispatched & Invoiced'
     | 'Dispatched'
@@ -1047,8 +1050,17 @@ export interface SalesOrder {
   invoiceNumber?: string;
   invoiceNo?: string;
   doNumber?: string;
+  doGeneratedAt?: string;
+  doAccepted?: boolean;
+  doAcceptedBy?: string;
+  doAcceptedAt?: string;
+  doAcceptedNotes?: string;
+  serialsUpdated?: boolean;
+  serialsUpdatedAt?: string;
+  serialsUpdatedBy?: string;
   poNumber?: string;
   challanNumber?: string;
+  challanGeneratedAt?: string;
   billNumber?: string;
   contactPerson?: string;
   deliveryAddressName?: string;

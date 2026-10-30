@@ -33,6 +33,7 @@ import {
   VisitLog,
   OfferPromotion,
   SalesOrder,
+  SalesOrderItem,
   Requisition,
   RequisitionItem,
   RequisitionStatus,
@@ -330,6 +331,15 @@ interface ERPContextType {
   createSalesOrder: (order: Omit<SalesOrder, 'id' | 'orderNumber' | 'status'>) => string;
   updateSalesOrder: (orderId: string, updates: Partial<SalesOrder>) => void;
   approveSalesOrder: (orderId: string, updatedOrderData?: Partial<SalesOrder>) => void;
+  acceptDeliveryOrder: (
+    orderId: string,
+    acceptanceDetails?: { acceptedBy?: string; notes?: string; acceptanceNotes?: string }
+  ) => void;
+  generateChallanWithSerials: (
+    orderId: string,
+    updatedItems: SalesOrderItem[],
+    details?: { updatedBy?: string; verifierName?: string; challanNumber?: string }
+  ) => string;
   dispatchAndInvoiceSalesOrder: (orderId: string) => void;
   confirmCustomerReceipt: (
     orderId: string,
@@ -771,12 +781,25 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
             // Filter out any legacy dummy sample orders
-            return parsed.filter(
-              (o: SalesOrder) =>
-                !o.id?.startsWith('so-2026-09-') &&
-                !o.id?.startsWith('so-2026-10-') &&
-                !o.id?.startsWith('so-hist-')
-            );
+            return parsed
+              .filter(
+                (o: SalesOrder) =>
+                  !o.id?.startsWith('so-2026-09-') &&
+                  !o.id?.startsWith('so-2026-10-') &&
+                  !o.id?.startsWith('so-hist-')
+              )
+              .map((o: SalesOrder) => {
+                if (o.status === 'Submitted') {
+                  return {
+                    ...o,
+                    doNumber: undefined,
+                    challanNumber: undefined,
+                    doAccepted: false,
+                    serialsUpdated: false,
+                  };
+                }
+                return o;
+              });
           }
         }
       } catch (e) {
@@ -1792,37 +1815,96 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .order('id', { ascending: false });
 
         if (!error && Array.isArray(data)) {
-          const mapped: SalesOrder[] = data.map((row: any) => ({
-            id: String(row.id),
-            orderNumber: row.order_number,
-            date: row.order_date ? String(row.order_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
-            channel: row.channel || 'Direct Sales',
-            distributorId: row.distributor_id ? String(row.distributor_id) : undefined,
-            distributorName: row.distributor_name || undefined,
-            customerId: row.customer_id ? String(row.customer_id) : 'cust-direct',
-            customerName: row.customer_name || 'Direct Customer',
-            salespersonId: row.salesperson_id ? String(row.salesperson_id) : 'u-1',
-            salespersonName: row.salesperson_name || 'Direct Sales',
-            warehouseId: row.warehouse_id ? String(row.warehouse_id) : 'wh-1',
-            warehouseName: row.warehouse_name || 'Main Warehouse',
-            status: row.status || 'Submitted',
-            subTotalBDT: Number(row.gross_amount_bdt) || 0,
-            discountBDT: Number(row.discount_amount_bdt) || 0,
-            taxVatBDT: Number(row.tax_vat_bdt) || 0,
-            vatRatePercent: row.vat_rate_percent !== undefined
-              ? Number(row.vat_rate_percent)
-              : Number(row.tax_vat_bdt) > 0 && Number(row.gross_amount_bdt) > 0
-              ? Number(((Number(row.tax_vat_bdt) / Math.max(1, Number(row.gross_amount_bdt) - (Number(row.discount_amount_bdt) || 0))) * 100).toFixed(1))
-              : 5,
-            netAmountBDT: Number(row.net_amount_bdt) || 0,
-            paidAmountBDT: Number(row.paid_amount_bdt) || 0,
-            dueAmountBDT: Number(row.due_amount_bdt) || 0,
-            paymentStatus: (Number(row.due_amount_bdt) || 0) <= 0 ? 'Paid' : (Number(row.paid_amount_bdt) || 0) > 0 ? 'Partially Paid' : 'Unpaid',
-            paymentMethod: row.payment_method || 'Credit (Due)',
-            appliedOfferCode: row.applied_offer_code || undefined,
-            notes: row.notes || undefined,
-            items: Array.isArray(row.items_json) ? row.items_json : [],
-          }));
+          const prevCachedOrders: SalesOrder[] = (() => {
+            if (typeof window !== 'undefined') {
+              try {
+                return JSON.parse(localStorage.getItem('ensec_sales_orders') || '[]');
+              } catch {
+                return [];
+              }
+            }
+            return [];
+          })();
+
+          const mapped: SalesOrder[] = data.map((row: any) => {
+            const cached = prevCachedOrders.find(
+              (c) => c.id === String(row.id) || c.orderNumber === row.order_number
+            );
+            const suffix = (row.order_number || String(row.id)).replace(/\D/g, '').slice(-2) || '88';
+            const autoDo = cached?.doNumber || `012/2026-${suffix}`;
+            const autoChallan = cached?.challanNumber || `BD-ES-2026-12-${suffix}`;
+            const autoBill = cached?.billNumber || `20260012-${suffix}`;
+            const isApproved = row.status !== 'Submitted' && row.status !== 'Cancelled';
+            const isDoStage = row.status === 'DO Generated' || row.status === 'DO Accepted';
+            const isChallanStage =
+              row.status === 'Challan Generated' ||
+              row.status === 'Dispatched & Invoiced' ||
+              row.status === 'Delivered';
+
+            return {
+              id: String(row.id),
+              orderNumber: row.order_number,
+              date: row.order_date ? String(row.order_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+              channel: row.channel || 'Direct Sales',
+              distributorId: row.distributor_id ? String(row.distributor_id) : undefined,
+              distributorName: row.distributor_name || undefined,
+              customerId: row.customer_id ? String(row.customer_id) : 'cust-direct',
+              customerName: row.customer_name || 'Direct Customer',
+              salespersonId: row.salesperson_id ? String(row.salesperson_id) : 'u-1',
+              salespersonName: row.salesperson_name || 'Direct Sales',
+              warehouseId: row.warehouse_id ? String(row.warehouse_id) : 'wh-1',
+              warehouseName: row.warehouse_name || 'Main Warehouse',
+              status: row.status || 'Submitted',
+              subTotalBDT: Number(row.gross_amount_bdt) || 0,
+              discountBDT: Number(row.discount_amount_bdt) || 0,
+              taxVatBDT: Number(row.tax_vat_bdt) || 0,
+              vatRatePercent:
+                row.vat_rate_percent !== undefined
+                  ? Number(row.vat_rate_percent)
+                  : Number(row.tax_vat_bdt) > 0 && Number(row.gross_amount_bdt) > 0
+                  ? Number(
+                      (
+                        (Number(row.tax_vat_bdt) /
+                          Math.max(1, Number(row.gross_amount_bdt) - (Number(row.discount_amount_bdt) || 0))) *
+                        100
+                      ).toFixed(1)
+                    )
+                  : 5,
+              netAmountBDT: Number(row.net_amount_bdt) || 0,
+              paidAmountBDT: Number(row.paid_amount_bdt) || 0,
+              dueAmountBDT: Number(row.due_amount_bdt) || 0,
+              paymentStatus:
+                (Number(row.due_amount_bdt) || 0) <= 0
+                  ? 'Paid'
+                  : (Number(row.paid_amount_bdt) || 0) > 0
+                  ? 'Partially Paid'
+                  : 'Unpaid',
+              paymentMethod: row.payment_method || 'Credit (Due)',
+              appliedOfferCode: row.applied_offer_code || undefined,
+              notes: row.notes || undefined,
+              items: Array.isArray(row.items_json) && row.items_json.length > 0 ? row.items_json : cached?.items || [],
+              // Workflow metadata preservation: DO and Challan are strictly hidden without Accounts Check & Approve
+              doNumber: isApproved ? (cached?.doNumber || (isDoStage || isChallanStage ? autoDo : undefined)) : undefined,
+              doGeneratedAt: isApproved ? (cached?.doGeneratedAt || (isDoStage || isChallanStage ? new Date().toISOString() : undefined)) : undefined,
+              doAccepted: isApproved ? (cached?.doAccepted ?? (row.status === 'DO Accepted' || isChallanStage)) : false,
+              doAcceptedBy: isApproved ? (cached?.doAcceptedBy || (row.status === 'DO Accepted' || isChallanStage ? 'Engr. Abu Jubair Khan (Factory In-Charge)' : undefined)) : undefined,
+              doAcceptedAt: isApproved ? cached?.doAcceptedAt : undefined,
+              doAcceptedNotes: isApproved ? cached?.doAcceptedNotes : undefined,
+              challanNumber: isApproved && isChallanStage ? (cached?.challanNumber || autoChallan) : undefined,
+              challanGeneratedAt: isApproved && isChallanStage ? (cached?.challanGeneratedAt || new Date().toISOString()) : undefined,
+              billNumber: cached?.billNumber || (isChallanStage ? autoBill : undefined),
+              serialsUpdated: isApproved ? (cached?.serialsUpdated ?? isChallanStage) : false,
+              serialsUpdatedBy: isApproved ? cached?.serialsUpdatedBy : undefined,
+              deliveryStatus: cached?.deliveryStatus || (row.status === 'Delivered' ? 'Received by Customer' : row.status === 'Dispatched & Invoiced' ? 'In Transit' : 'Pending Dispatch'),
+              receivedByCustomer: cached?.receivedByCustomer ?? (row.status === 'Delivered'),
+              customerReceivedAt: cached?.customerReceivedAt,
+              customerReceiverName: cached?.customerReceiverName,
+              customerReceiverPhone: cached?.customerReceiverPhone,
+              customerReceiverNotes: cached?.customerReceiverNotes,
+              customerReceiptSignature: cached?.customerReceiptSignature,
+              deliveryHandoverBy: cached?.deliveryHandoverBy,
+            };
+          });
 
           setSalesOrders(mapped);
           if (typeof window !== 'undefined') {
@@ -6272,15 +6354,17 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id,
       orderNumber,
       status: 'Submitted',
-      challanNumber: autoChallanNo,
+      challanNumber: undefined,
       billNumber: autoBillNo,
-      doNumber: autoDoNo,
+      doNumber: undefined,
       poNumber: autoPoNo,
       deliveryStatus: 'Pending Dispatch',
       items: itemsWithSerials,
+      doAccepted: false,
+      serialsUpdated: false,
     };
     setSalesOrders((prev) => [newOrder, ...prev]);
-    addAuditLog('SALES_ORDER_PLACED', 'Sales & Distribution', `Sales Order ${orderNumber} created for ${newOrder.customerName}. Auto Challan #${autoChallanNo} generated. Net: BDT ${newOrder.netAmountBDT.toLocaleString()}`);
+    addAuditLog('SALES_ORDER_PLACED', 'Sales & Distribution', `Sales Order ${orderNumber} created for ${newOrder.customerName}. Pending Accounts Rate Verification & Approval. Net: BDT ${newOrder.netAmountBDT.toLocaleString()}`);
 
     // Persist to Supabase database
     const sb = getSupabase();
@@ -6353,8 +6437,6 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const approveSalesOrder = (orderId: string, updatedOrderData?: Partial<SalesOrder>) => {
     const targetSo = salesOrders.find((so) => so.id === orderId || so.orderNumber === orderId);
     const suffix = (targetSo?.orderNumber || orderId).replace(/\D/g, '').slice(-2) || '88';
-    const autoChallan = targetSo?.challanNumber || `BD-ES-2026-12-${suffix}`;
-    const autoBill = targetSo?.billNumber || `20260012-${suffix}`;
     const autoDo = targetSo?.doNumber || `012/2026-${suffix}`;
 
     setSalesOrders((prev) =>
@@ -6362,12 +6444,14 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (so.id === orderId || so.orderNumber === orderId) {
           return {
             ...so,
-            challanNumber: so.challanNumber || autoChallan,
-            billNumber: so.billNumber || autoBill,
             doNumber: so.doNumber || autoDo,
+            doGeneratedAt: so.doGeneratedAt || new Date().toISOString(),
+            doAccepted: false,
+            // CRITICAL: At this stage, NO Challan should be generated
+            challanNumber: undefined,
             deliveryStatus: 'Pending Dispatch',
             ...(updatedOrderData || {}),
-            status: 'Approved',
+            status: 'DO Generated',
           };
         }
         return so;
@@ -6375,15 +6459,15 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     const logDesc = updatedOrderData?.items
-      ? `Order ${targetSo?.orderNumber || orderId} reviewed and approved by Accounts. Factory Challan #${autoChallan} pre-generated. Revised Net: BDT ${(updatedOrderData.netAmountBDT ?? targetSo?.netAmountBDT)?.toLocaleString()}`
-      : `Order ${targetSo?.orderNumber || orderId} approved by Accounts. Auto Factory Challan #${autoChallan} ready for dispatch.`;
+      ? `Order ${targetSo?.orderNumber || orderId} reviewed and approved by Accounts. Factory Delivery Order (D.O. #${autoDo}) generated. Pending Factory DO Review & Acceptance.`
+      : `Order ${targetSo?.orderNumber || orderId} approved by Accounts. Factory Delivery Order (D.O. #${autoDo}) generated. Pending Factory DO Review & Acceptance.`;
     addAuditLog('ORDER_APPROVED', 'Accounts & Commercial', logDesc);
 
     const sb = getSupabase();
     if (sb) {
       const isNumeric = /^\d+$/.test(orderId);
       const updatePayload: any = {
-        status: 'Approved',
+        status: 'DO Generated',
       };
       if (updatedOrderData?.items) {
         updatePayload.items_json = updatedOrderData.items;
@@ -6414,6 +6498,105 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (error) console.error('Failed to update sales order approval in Supabase:', error);
       });
     }
+  };
+
+  const acceptDeliveryOrder = (
+    orderId: string,
+    acceptanceDetails?: { acceptedBy?: string; notes?: string; acceptanceNotes?: string }
+  ) => {
+    const targetSo = salesOrders.find((so) => so.id === orderId || so.orderNumber === orderId);
+    const acceptedBy = acceptanceDetails?.acceptedBy || 'Engr. Abu Jubair Khan (Factory In-Charge)';
+    const acceptedAt = new Date().toISOString();
+    const notes = acceptanceDetails?.notes || acceptanceDetails?.acceptanceNotes || '';
+
+    setSalesOrders((prev) =>
+      prev.map((so) => {
+        if (so.id === orderId || so.orderNumber === orderId) {
+          return {
+            ...so,
+            doAccepted: true,
+            doAcceptedBy: acceptedBy,
+            doAcceptedAt: acceptedAt,
+            doAcceptedNotes: notes,
+            status: 'DO Accepted',
+          };
+        }
+        return so;
+      })
+    );
+
+    addAuditLog(
+      'DO_ACCEPTED',
+      'Factory Production & Dispatch',
+      `Delivery Order #${targetSo?.doNumber || 'D.O.'} for order ${targetSo?.orderNumber || orderId} reviewed and accepted by factory (${acceptedBy}). Awaiting battery serial verification.`
+    );
+
+    const sb = getSupabase();
+    if (sb) {
+      const isNumeric = /^\d+$/.test(orderId);
+      const query = isNumeric
+        ? sb.from('sales_orders').update({ status: 'DO Accepted' }).eq('id', Number(orderId))
+        : sb.from('sales_orders').update({ status: 'DO Accepted' }).eq('order_number', targetSo?.orderNumber || orderId);
+      query.then(({ error }: any) => {
+        if (error) console.error('Failed to update DO acceptance in Supabase:', error);
+      });
+    }
+  };
+
+  const generateChallanWithSerials = (
+    orderId: string,
+    updatedItems: SalesOrderItem[],
+    details?: { updatedBy?: string; verifierName?: string; challanNumber?: string }
+  ): string => {
+    const targetSo = salesOrders.find((so) => so.id === orderId || so.orderNumber === orderId);
+    const suffix = (targetSo?.orderNumber || orderId).replace(/\D/g, '').slice(-2) || '88';
+    const autoChallan = details?.challanNumber || targetSo?.challanNumber || `BD-ES-2026-12-${suffix}`;
+    const autoBill = targetSo?.billNumber || `20260012-${suffix}`;
+    const updatedBy = details?.verifierName || details?.updatedBy || 'Engr. Abu Jubair Khan (Factory In-Charge)';
+
+    setSalesOrders((prev) =>
+      prev.map((so) => {
+        if (so.id === orderId || so.orderNumber === orderId) {
+          return {
+            ...so,
+            items: updatedItems,
+            serialsUpdated: true,
+            serialsUpdatedAt: new Date().toISOString(),
+            serialsUpdatedBy: updatedBy,
+            challanNumber: autoChallan,
+            billNumber: so.billNumber || autoBill,
+            challanGeneratedAt: new Date().toISOString(),
+            status: 'Challan Generated',
+          };
+        }
+        return so;
+      })
+    );
+
+    addAuditLog(
+      'CHALLAN_GENERATED',
+      'Factory Dispatch',
+      `Battery serial numbers verified for order ${targetSo?.orderNumber || orderId}. Official Factory Challan #${autoChallan} generated automatically. Ready for Dispatch & Invoice.`
+    );
+
+    const sb = getSupabase();
+    if (sb) {
+      const isNumeric = /^\d+$/.test(orderId);
+      const query = isNumeric
+        ? sb.from('sales_orders').update({
+            status: 'Challan Generated',
+            items_json: updatedItems,
+          }).eq('id', Number(orderId))
+        : sb.from('sales_orders').update({
+            status: 'Challan Generated',
+            items_json: updatedItems,
+          }).eq('order_number', targetSo?.orderNumber || orderId);
+      query.then(({ error }: any) => {
+        if (error) console.error('Failed to update Challan generation in Supabase:', error);
+      });
+    }
+
+    return autoChallan;
   };
 
   const dispatchAndInvoiceSalesOrder = (orderId: string) => {
@@ -8067,6 +8250,8 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createSalesOrder,
         updateSalesOrder,
         approveSalesOrder,
+        acceptDeliveryOrder,
+        generateChallanWithSerials,
         dispatchAndInvoiceSalesOrder,
         confirmCustomerReceipt,
         recordOrderPayment,

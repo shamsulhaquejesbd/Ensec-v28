@@ -54,6 +54,8 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
     salesOrders,
     updateSalesOrder,
     approveSalesOrder,
+    acceptDeliveryOrder,
+    generateChallanWithSerials,
     dispatchAndInvoiceSalesOrder,
     confirmCustomerReceipt,
     recordOrderPayment,
@@ -92,6 +94,26 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
   const [payRef, setPayRef] = useState('');
   const [notificationBanner, setNotificationBanner] = useState<string | null>(null);
   const [orderToDispatchConfirm, setOrderToDispatchConfirm] = useState<SalesOrder | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // DO ACCEPTANCE MODAL STATE (Factory Concerned Person Step)
+  // ---------------------------------------------------------------------------
+  const [selectedOrderForDOAcceptance, setSelectedOrderForDOAcceptance] = useState<SalesOrder | null>(null);
+  const [factoryPersonName, setFactoryPersonName] = useState<string>(
+    'Engr. Abu Jubair Khan (Factory / Production In-Charge)'
+  );
+  const [factoryAcceptanceNotes, setFactoryAcceptanceNotes] = useState<string>(
+    'D.O. reviewed against factory stock & schedule. Accepted for battery serial allocation.'
+  );
+
+  // ---------------------------------------------------------------------------
+  // BATTERY SERIAL NUMBERS & AUTOMATIC CHALLAN GENERATION MODAL STATE
+  // ---------------------------------------------------------------------------
+  const [selectedOrderForSerialsAndChallan, setSelectedOrderForSerialsAndChallan] = useState<SalesOrder | null>(null);
+  const [serialsFormItems, setSerialsFormItems] = useState<SalesOrderItem[]>([]);
+  const [serialsVerifierName, setSerialsVerifierName] = useState<string>(
+    'Engr. Abu Jubair Khan (Factory / Production In-Charge)'
+  );
 
   // ---------------------------------------------------------------------------
   // ACCOUNTS ORDER REVIEW & RATE VERIFICATION MODAL STATE
@@ -186,7 +208,24 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
 
       // 3. Status Filtering
       if (statusFilter !== 'all') {
-        if (order.status?.toLowerCase() !== statusFilter.toLowerCase()) return false;
+        if (statusFilter === 'DO Generated') {
+          const isDOGen = order.status === 'DO Generated' || (!order.doAccepted && !!order.doNumber && !order.challanNumber);
+          if (!isDOGen) return false;
+        } else if (statusFilter === 'DO Accepted') {
+          const isDOAcc = order.status === 'DO Accepted' || (!!order.doAccepted && !order.challanNumber);
+          if (!isDOAcc) return false;
+        } else if (statusFilter === 'Challan Generated') {
+          const isChallanGen = order.status === 'Challan Generated' || (!!order.challanNumber && (order.status === 'Approved' || order.status === 'Challan Generated'));
+          if (!isChallanGen) return false;
+        } else if (statusFilter === 'Dispatched & Invoiced') {
+          const isDisp = order.status === 'Dispatched & Invoiced' || order.status === 'Dispatched';
+          if (!isDisp) return false;
+        } else if (statusFilter === 'Delivered') {
+          const isDelivered = order.status === 'Delivered' || !!order.receivedByCustomer;
+          if (!isDelivered) return false;
+        } else if (order.status?.toLowerCase() !== statusFilter.toLowerCase()) {
+          return false;
+        }
       }
 
       // 4. Customer Name Filtering
@@ -501,18 +540,148 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
     };
 
     const doNum = reviewOrder.doNumber || `012/2026-${(reviewOrder.orderNumber || reviewOrder.id).replace(/\D/g, "").slice(-2).padStart(2, "0") || "88"}`;
-    const enrichedData = { ...updatedData, doNumber: doNum };
+    const enrichedData = {
+      ...updatedData,
+      doNumber: doNum,
+      status: 'DO Generated' as const,
+      doAccepted: false,
+      challanNumber: undefined,
+    };
     approveSalesOrder(reviewOrder.id, enrichedData);
     setNotificationBanner(
-      `Order ${reviewOrder.orderNumber} successfully approved by Accounts! Official Factory Delivery Order (D.O. #${doNum}) generated.`
+      `Order ${reviewOrder.orderNumber} successfully approved by Accounts! Official Factory Delivery Order (D.O. #${doNum}) generated. Note: No Challan generated yet — requires Factory D.O. Acceptance and Battery Serials.`
     );
-    setTimeout(() => setNotificationBanner(null), 5000);
+    setTimeout(() => setNotificationBanner(null), 6000);
     setSelectedOrderForDO({
       ...reviewOrder,
       ...enrichedData,
-      status: 'Approved',
+      status: 'DO Generated',
     } as SalesOrder);
     setReviewOrder(null);
+  };
+
+  // ---------------------------------------------------------------------------
+  // FACTORY D.O. ACCEPTANCE HANDLERS
+  // ---------------------------------------------------------------------------
+  const handleOpenDOAcceptance = (order: SalesOrder) => {
+    setSelectedOrderForDOAcceptance(order);
+    setFactoryPersonName('Engr. Abu Jubair Khan (Factory / Production In-Charge)');
+    setFactoryAcceptanceNotes('D.O. reviewed against factory stock & schedule. Accepted for battery serial allocation.');
+  };
+
+  const handleConfirmDOAcceptance = (customOrder?: SalesOrder, details?: { acceptedBy?: string; notes?: string }) => {
+    const target = customOrder || selectedOrderForDOAcceptance;
+    if (!target) return;
+    const person = details?.acceptedBy || factoryPersonName;
+    const notes = details?.notes || factoryAcceptanceNotes;
+
+    acceptDeliveryOrder(target.id, {
+      acceptedBy: person,
+      acceptanceNotes: notes,
+    });
+
+    setNotificationBanner(
+      `✅ Delivery Order #${target.doNumber || target.orderNumber} accepted by Factory (${person})! Please now assign battery serial numbers to generate Challan.`
+    );
+    setTimeout(() => setNotificationBanner(null), 6000);
+
+    const updated: SalesOrder = {
+      ...target,
+      status: 'DO Accepted',
+      doAccepted: true,
+      doAcceptedBy: person,
+      doAcceptedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      doAcceptedNotes: notes,
+    };
+
+    setSelectedOrderForDOAcceptance(null);
+    if (selectedOrderForDO && selectedOrderForDO.id === target.id) {
+      setSelectedOrderForDO(updated);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // BATTERY SERIAL NUMBERS & AUTOMATIC CHALLAN GENERATION HANDLERS
+  // ---------------------------------------------------------------------------
+  const handleOpenSerialsModal = (order: SalesOrder) => {
+    setSelectedOrderForSerialsAndChallan(order);
+    setSerialsVerifierName('Engr. Abu Jubair Khan (Factory / Production In-Charge)');
+    const clonedItems: SalesOrderItem[] = (order.items || []).map((item, idx) => {
+      const qty = item.quantity || 1;
+      let existingSerials = item.serialNumbers && item.serialNumbers.length > 0 ? [...item.serialNumbers] : [];
+      if (existingSerials.length < qty) {
+        const itemPrefix = (item.productName || 'ENS').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5) || 'BAT';
+        for (let i = existingSerials.length; i < qty; i++) {
+          existingSerials.push(`SN-2026-${itemPrefix}-${Math.floor(1000 + Math.random() * 9000)}-${idx + 1}${i + 1}`);
+        }
+      }
+      return {
+        ...item,
+        serialNumbers: existingSerials,
+      };
+    });
+    setSerialsFormItems(clonedItems);
+  };
+
+  const handleSerialChange = (itemIdx: number, serialIdx: number, value: string) => {
+    setSerialsFormItems((prev) =>
+      prev.map((it, i) => {
+        if (i !== itemIdx) return it;
+        const newSerials = [...(it.serialNumbers || [])];
+        newSerials[serialIdx] = value;
+        return { ...it, serialNumbers: newSerials };
+      })
+    );
+  };
+
+  const handleRegenerateItemSerials = (itemIdx: number) => {
+    setSerialsFormItems((prev) =>
+      prev.map((it, i) => {
+        if (i !== itemIdx) return it;
+        const itemPrefix = (it.productName || 'ENS').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5) || 'BAT';
+        const newSerials = Array.from({ length: it.quantity || 1 }, (_, sIdx) =>
+          `SN-2026-${itemPrefix}-${Math.floor(1000 + Math.random() * 9000)}-${i + 1}${sIdx + 1}`
+        );
+        return { ...it, serialNumbers: newSerials };
+      })
+    );
+  };
+
+  const handleConfirmSerialsAndGenerateChallan = () => {
+    if (!selectedOrderForSerialsAndChallan) return;
+
+    // Check for empty serials
+    const hasEmpty = serialsFormItems.some((it) =>
+      (it.serialNumbers || []).some((s) => !s || !s.trim())
+    );
+    if (hasEmpty) {
+      alert('Please provide valid battery serial numbers for all units before generating Challan.');
+      return;
+    }
+
+    const orderId = selectedOrderForSerialsAndChallan.id;
+    const generatedChallanNo = generateChallanWithSerials(orderId, serialsFormItems, {
+      verifierName: serialsVerifierName,
+    });
+
+    setNotificationBanner(
+      `🎉 Battery serial numbers confirmed! Challan #${generatedChallanNo} generated automatically. Ready for Dispatch & Invoice!`
+    );
+    setTimeout(() => setNotificationBanner(null), 6000);
+
+    const updatedOrder: SalesOrder = {
+      ...selectedOrderForSerialsAndChallan,
+      status: 'Challan Generated',
+      items: serialsFormItems,
+      challanNumber: generatedChallanNo,
+      serialsUpdated: true,
+      serialsUpdatedBy: serialsVerifierName,
+      serialsUpdatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      challanGeneratedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    };
+
+    setSelectedOrderForSerialsAndChallan(null);
+    setSelectedOrderForChallan(updatedOrder);
   };
 
   // Payment modal trigger
@@ -768,11 +937,13 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 text-xs cursor-pointer font-medium"
             >
               <option value="all">All Statuses (Every Stage)</option>
-              <option value="Submitted">Submitted (Pending Accounts Check & Rate Verification)</option>
-              <option value="Approved">Approved (Ready for Dispatch)</option>
-              <option value="Dispatched">Dispatched</option>
-              <option value="Invoiced">Invoiced (Final Posted)</option>
-              <option value="Delivered">Delivered</option>
+              <option value="Submitted">1. Submitted (Pending Accounts Rate Verification)</option>
+              <option value="DO Generated">2. DO Generated (Pending Factory Acceptance - No Challan)</option>
+              <option value="DO Accepted">3. DO Accepted (Pending Battery Serials Entry)</option>
+              <option value="Challan Generated">4. Challan Generated (Ready for Dispatch)</option>
+              <option value="Approved">Approved (Legacy / Challan Ready)</option>
+              <option value="Dispatched & Invoiced">5. Dispatched & Invoiced</option>
+              <option value="Delivered">6. Received by Customer</option>
               <option value="Cancelled">Cancelled</option>
             </select>
           </div>
@@ -942,6 +1113,7 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
         )}
       </div>
 
+  
       {/* ===================================================================== */}
       {/* ORDERS MASTER TABLE                                                   */}
       {/* ===================================================================== */}
@@ -1014,6 +1186,18 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
               ) : (
                 paginatedOrders.map((so) => {
                   const due = so.dueAmountBDT ?? (so.netAmountBDT - (so.paidAmountBDT || 0));
+                  const isCheckedAndApproved = so.status !== 'Submitted' && so.status !== 'Cancelled';
+                  const hasChallan =
+                    isCheckedAndApproved &&
+                    Boolean(
+                      so.challanNumber &&
+                        (so.status === 'Challan Generated' ||
+                          so.status === 'Dispatched & Invoiced' ||
+                          so.status === 'Dispatched' ||
+                          so.status === 'Delivered' ||
+                          so.status === 'Invoiced' ||
+                          (so.status === 'Approved' && so.serialsUpdated))
+                    );
 
                   return (
                     <tr
@@ -1115,13 +1299,15 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
                               : so.status === 'Dispatched & Invoiced' || so.status === 'Dispatched'
                               ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-                              : so.status === 'Invoiced'
-                              ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
-                              : so.status === 'Approved'
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                              : so.status === 'Challan Generated' || (so.challanNumber && so.status === 'Approved')
+                              ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800'
+                              : so.status === 'DO Accepted' || (so.doAccepted && !so.challanNumber)
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800'
+                              : so.status === 'DO Generated' || (so.doNumber && !so.doAccepted && !so.challanNumber)
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
                               : so.status === 'Cancelled'
                               ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              : 'bg-amber-50 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200'
                           }`}
                         >
                           {so.status === 'Delivered' || so.receivedByCustomer ? (
@@ -1134,8 +1320,21 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                               <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
                               <span>Dispatched (Awaiting Handover)</span>
                             </>
-                          ) : so.status === 'Approved' ? (
-                            <span>Approved (Challan Ready)</span>
+                          ) : so.status === 'Challan Generated' || (so.challanNumber && so.status === 'Approved') ? (
+                            <>
+                              <FileText className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
+                              <span>Challan Generated (Ready Dispatch)</span>
+                            </>
+                          ) : so.status === 'DO Accepted' || (so.doAccepted && !so.challanNumber) ? (
+                            <>
+                              <Sparkles className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                              <span>DO Accepted (Pending Serials)</span>
+                            </>
+                          ) : so.status === 'DO Generated' || (so.doNumber && !so.doAccepted && !so.challanNumber) ? (
+                            <>
+                              <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                              <span>DO Generated (Pending Factory Acceptance)</span>
+                            </>
                           ) : so.status === 'Submitted' ? (
                             <span>Submitted (Verify Rates)</span>
                           ) : (
@@ -1157,47 +1356,73 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {/* Accounts Rate Verification & Approval */}
-                          {so.status === 'Submitted' && (
+                          {/* 1. Accounts Rate Verification & Approval: Available ONLY when unapproved; HIDDEN once approved */}
+                          {!isCheckedAndApproved && so.status === 'Submitted' && (
                             <button
                               type="button"
                               onClick={() => handleOpenAccountsApprovalModal(so)}
                               className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] cursor-pointer transition-colors shadow-xs"
-                              title="Accounts Rate Check: Verify order copy and revise product rates before approving"
+                              title="Accounts Rate Check: Verify order copy and approve. Generates official D.O. (No Challan yet)"
                             >
                               <ShieldCheck className="w-3.5 h-3.5" />
                               <span>Check & Approve</span>
                             </button>
                           )}
 
-                          {/* OFFICIAL FACTORY DELIVERY ORDER (D.O.) - ONLY AFTER CHECK & APPROVAL */}
-                          {so.status !== 'Submitted' && so.status !== 'Booked' && so.status !== 'Cancelled' && so.status !== 'Rejected' && (
+                          {/* 2. D.O. Button: Available ONLY AFTER Check & Approve */}
+                          {isCheckedAndApproved && Boolean(so.doNumber) && (
                             <button
                               type="button"
                               onClick={() => setSelectedOrderForDO(so)}
                               className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 font-bold text-[11px] cursor-pointer transition-colors border border-emerald-300 dark:border-emerald-800 shadow-xs"
-                              title="View official Factory Delivery Order (D.O.) for release authorization"
+                              title="View official Factory Delivery Order (D.O.)"
                             >
                               <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                               <span>D.O.</span>
                             </button>
                           )}
 
-                          {/* AUTO-GENERATED FACTORY CHALLAN - ONLY AFTER CHECK & APPROVAL */}
-                          {so.status !== 'Submitted' && so.status !== 'Booked' && so.status !== 'Cancelled' && so.status !== 'Rejected' && (
+                          {/* 2b. Factory D.O. Acceptance Button: Available ONLY AFTER Check & Approve when DO is pending factory acceptance */}
+                          {isCheckedAndApproved && Boolean(so.doNumber) && !so.doAccepted && !hasChallan && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDOAcceptance(so)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] cursor-pointer transition-colors shadow-xs animate-pulse"
+                              title="Factory Review: Accept D.O. before proceeding to battery serial allocation"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Accept D.O. (Factory)</span>
+                            </button>
+                          )}
+
+                          {/* 3. Battery Serials & Challan Generation: Available ONLY AFTER D.O. is accepted by factory */}
+                          {isCheckedAndApproved && Boolean(so.doAccepted) && !hasChallan && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenSerialsModal(so)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] cursor-pointer transition-colors shadow-xs shadow-purple-600/20"
+                              title="Update battery serial numbers to automatically generate official Challan"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                              <span>Assign Serials & Gen Challan</span>
+                            </button>
+                          )}
+
+                          {/* 4. Factory Challan Button: Available ONLY AFTER Challan has been generated */}
+                          {isCheckedAndApproved && hasChallan && (
                             <button
                               type="button"
                               onClick={() => setSelectedOrderForChallan(so)}
                               className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 dark:text-blue-300 font-bold text-[11px] cursor-pointer transition-colors border border-blue-200 dark:border-blue-800 shadow-xs"
-                              title="View official Factory Challan (Matches uploaded sample layout)"
+                              title="View official Factory Challan with allocated battery serials"
                             >
                               <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                               <span>Challan</span>
                             </button>
                           )}
 
-                          {/* Factory Dispatch & Invoice Action - ONLY AFTER APPROVED */}
-                          {so.status === 'Approved' && (
+                          {/* 5. Factory Dispatch & Invoice: Only available when Challan exists */}
+                          {isCheckedAndApproved && hasChallan && (so.status === 'Challan Generated' || so.status === 'Approved') && (
                             <button
                               type="button"
                               onClick={() => setOrderToDispatchConfirm(so)}
@@ -1209,7 +1434,7 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                             </button>
                           )}
 
-                          {/* SALESMAN CUSTOMER RECEIPT HANDOVER (Requested by User) */}
+                          {/* 6. Salesman Customer Receipt Handover */}
                           {(so.status === 'Dispatched & Invoiced' || so.status === 'Dispatched') && (
                             <button
                               type="button"
@@ -1222,13 +1447,13 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                             </button>
                           )}
 
-                          {/* VIEW RECEIPT PROOF (When Already Delivered) */}
+                          {/* 7. View Receipt Proof (When Delivered) */}
                           {(so.status === 'Delivered' || so.receivedByCustomer) && (
                             <button
                               type="button"
                               onClick={() => setSelectedOrderReceiptProof(so)}
-                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-[11px] cursor-pointer transition-colors border border-emerald-200 dark:border-emerald-800"
-                              title="View Customer Handover Confirmation Proof"
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-300 font-bold text-[11px] cursor-pointer transition-colors border border-emerald-300 dark:border-emerald-800 shadow-xs"
+                              title="View Customer Handover Confirmation Certificate"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                               <span>Receipt Proof</span>
@@ -2014,7 +2239,8 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {selectedOrderForInvoice.status === 'Submitted' && (
+                {/* Once approved, "Check & Approve" is completely hidden */}
+                {selectedOrderForInvoice.status === 'Submitted' ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -2025,8 +2251,42 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-colors"
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Check & Change Rates</span>
+                    <span>Check & Approve</span>
                   </button>
+                ) : (
+                  <>
+                    {/* DO copy: strictly hidden without Check & Approve */}
+                    {selectedOrderForInvoice.doNumber && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = selectedOrderForInvoice;
+                          setSelectedOrderForInvoice(null);
+                          setSelectedOrderForDO(target);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold text-xs border border-emerald-300 dark:border-emerald-800 cursor-pointer shadow-xs transition-colors"
+                      >
+                        <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>View D.O. Copy</span>
+                      </button>
+                    )}
+
+                    {/* Challan copy: strictly hidden without Check & Approve & Serial Allocation */}
+                    {selectedOrderForInvoice.challanNumber && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = selectedOrderForInvoice;
+                          setSelectedOrderForInvoice(null);
+                          setSelectedOrderForChallan(target);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-800 cursor-pointer shadow-xs transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>View Challan Copy</span>
+                      </button>
+                    )}
+                  </>
                 )}
                 <button
                   type="button"
@@ -2216,12 +2476,310 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
           order={selectedOrderForDO}
           onClose={() => setSelectedOrderForDO(null)}
           onUpdateOrder={updateSalesOrder}
+          onAcceptDO={(orderId, details) => {
+            handleConfirmDOAcceptance(selectedOrderForDO, details);
+          }}
+          onOpenSerialsAndChallan={(order) => {
+            setSelectedOrderForDO(null);
+            handleOpenSerialsModal(order);
+          }}
           onSwitchToChallan={() => {
             const ord = selectedOrderForDO;
             setSelectedOrderForDO(null);
             setSelectedOrderForChallan(ord);
           }}
         />
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL: FACTORY D.O. REVIEW & ACCEPTANCE (Requested by User)           */}
+      {/* ===================================================================== */}
+      {selectedOrderForDOAcceptance && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full p-6 text-slate-800 dark:text-slate-100 space-y-4 my-8">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 rounded-2xl border border-amber-500/20">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Factory Review &amp; D.O. Acceptance
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Step 2: Factory in-charge must accept the D.O. before proceeding to battery serial allocation
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForDOAcceptance(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Order & DO Summary Box */}
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 space-y-2.5 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase font-bold">Delivery Order No</span>
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">
+                    {selectedOrderForDOAcceptance.doNumber || `012/2026-${selectedOrderForDOAcceptance.orderNumber}`}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase font-bold">Order Number</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">
+                    {selectedOrderForDOAcceptance.orderNumber}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase font-bold">Customer / Buyer</span>
+                  <span className="font-semibold text-slate-900 dark:text-white truncate block">
+                    {selectedOrderForDOAcceptance.customerName}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase font-bold">Delivery Warehouse Hub</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300 truncate block">
+                    {selectedOrderForDOAcceptance.warehouseName || 'Gazipur Main Hub'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] text-slate-400 block uppercase font-bold mb-1">
+                  Ordered Products &amp; Quantities to Release
+                </span>
+                <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                  {(selectedOrderForDOAcceptance.items || []).map((it, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between py-1 px-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
+                    >
+                      <span className="font-medium text-slate-800 dark:text-slate-200">
+                        {it.productName}
+                      </span>
+                      <span className="font-bold text-blue-600 dark:text-blue-400 font-mono">
+                        {it.quantity} units
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Acceptance Form */}
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Factory In-Charge / Concerned Person Name
+                </label>
+                <input
+                  type="text"
+                  value={factoryPersonName}
+                  onChange={(e) => setFactoryPersonName(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold text-xs"
+                  placeholder="e.g. Engr. Abu Jubair Khan (Factory / Production In-Charge)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Factory Acceptance Notes &amp; Allocation Comments
+                </label>
+                <textarea
+                  rows={2}
+                  value={factoryAcceptanceNotes}
+                  onChange={(e) => setFactoryAcceptanceNotes(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
+                  placeholder="Notes regarding battery physical stock, packaging check, or serial allocation..."
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>
+                  <strong>Strict Workflow Rule:</strong> Challan is <em>NOT</em> generated at this stage. Once you accept this D.O., you will be directed to input the battery unit serial numbers, which will then automatically generate the Challan.
+                </span>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForDOAcceptance(null)}
+                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmDOAcceptance()}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs cursor-pointer shadow-sm transition-all"
+              >
+                <Check className="w-4 h-4" />
+                <span>Accept D.O. &amp; Proceed to Battery Serials</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL: BATTERY SERIAL NUMBERS & AUTOMATIC CHALLAN GENERATION           */}
+      {/* ===================================================================== */}
+      {selectedOrderForSerialsAndChallan && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full p-6 text-slate-800 dark:text-slate-100 space-y-4 my-8">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-purple-500/15 text-purple-600 dark:text-purple-400 rounded-2xl border border-purple-500/20">
+                  <SlidersHorizontal className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Update Battery Serials &amp; Generate Challan
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Step 3: Only after D.O. is accepted and serials are recorded, the system automatically generates the Challan
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForSerialsAndChallan(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* D.O. Acceptance Verified Tag */}
+            <div className="p-3 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                <div>
+                  <span className="font-bold text-purple-900 dark:text-purple-200">
+                    D.O. Accepted by Factory:
+                  </span>{' '}
+                  <span className="text-purple-700 dark:text-purple-300">
+                    {selectedOrderForSerialsAndChallan.doAcceptedBy || 'Engr. Abu Jubair Khan'}
+                  </span>
+                  <div className="text-[10px] text-purple-600/80">
+                    D.O. No: {selectedOrderForSerialsAndChallan.doNumber} • Order: {selectedOrderForSerialsAndChallan.orderNumber}
+                  </div>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200 font-bold text-[10px]">
+                Ready for Serials
+              </span>
+            </div>
+
+            {/* Verifier Input */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Serial Number Verified &amp; Allocated By
+              </label>
+              <input
+                type="text"
+                value={serialsVerifierName}
+                onChange={(e) => setSerialsVerifierName(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold"
+                placeholder="e.g. Engr. Abu Jubair Khan (Factory / Production In-Charge)"
+              />
+            </div>
+
+            {/* Battery Items & Serials Editor */}
+            <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
+              {serialsFormItems.map((item, itemIdx) => {
+                const qty = item.quantity || 1;
+                return (
+                  <div
+                    key={itemIdx}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-white text-xs">
+                          {item.productName}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Total Units: <strong className="text-purple-600 dark:text-purple-400">{qty}</strong> • Rate: ৳{item.unitPriceBDT?.toLocaleString()}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRegenerateItemSerials(itemIdx)}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 p-1 cursor-pointer"
+                        title="Auto-generate standard Ensec serial numbers"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Auto-Fill Serials</span>
+                      </button>
+                    </div>
+
+                    {/* Serial Number Inputs Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {Array.from({ length: qty }).map((_, sIdx) => {
+                        const val = item.serialNumbers?.[sIdx] || '';
+                        return (
+                          <div key={sIdx} className="space-y-1">
+                            <label className="text-[10px] font-mono text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                              <span>Unit #{sIdx + 1} Serial</span>
+                              {val && <span className="text-emerald-500 font-bold">✓ Ready</span>}
+                            </label>
+                            <input
+                              type="text"
+                              value={val}
+                              onChange={(e) => handleSerialChange(itemIdx, sIdx, e.target.value)}
+                              placeholder={`SN-2026-${(item.productName || 'ENS').slice(0, 4)}-${sIdx + 1}`}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs font-semibold focus:ring-2 focus:ring-purple-500/30"
+                              required
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Automatic Generation Notice */}
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
+              <Sparkles className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+              <span>
+                <strong>Automatic Challan Generation:</strong> Clicking the button below will save these battery serial numbers and <strong>immediately generate official Challan (BD-ES-2026-12-XX)</strong> with the exact factory layout ready for Dispatch &amp; Invoicing.
+              </span>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForSerialsAndChallan(null)}
+                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSerialsAndGenerateChallan}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs cursor-pointer shadow-md shadow-purple-600/20 transition-all"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Confirm Serials &amp; Automatically Generate Challan</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showPaymentModal && (
