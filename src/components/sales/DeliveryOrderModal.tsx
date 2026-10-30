@@ -260,54 +260,6 @@ export const DeliveryOrderModal: React.FC<DeliveryOrderModalProps> = ({
               </button>
             </div>
           </div>
-
-          {/* Workflow Stage Notice */}
-          {!isAccepted ? (
-            <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-2">
-              <span>
-                <strong>Factory Action Required:</strong> Delivery Order is issued. The factory concerned person must review and accept this D.O. before proceeding to battery serial assignment and Challan generation.
-              </span>
-              {onAcceptDO && (
-                <button
-                  type="button"
-                  onClick={() => setShowAcceptPrompt(true)}
-                  className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] shrink-0 cursor-pointer"
-                >
-                  Accept Now
-                </button>
-              )}
-            </div>
-          ) : !order.challanNumber ? (
-            <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-800 dark:text-blue-300 flex items-center justify-between gap-2">
-              <span>
-                <strong>Next Step:</strong> D.O. accepted by {order.doAcceptedBy || 'Factory'}. Update or verify battery serial numbers to automatically generate the official Factory Challan.
-              </span>
-              {onOpenSerialsAndChallan && (
-                <button
-                  type="button"
-                  onClick={() => onOpenSerialsAndChallan(order)}
-                  className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shrink-0 cursor-pointer"
-                >
-                  Enter Serials &amp; Gen Challan
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900/60 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-2">
-              <span>
-                <strong>Challan Generated:</strong> Official Challan #{order.challanNumber} is ready. Proceed to Dispatch &amp; Invoice when physical transport is ready.
-              </span>
-              {onSwitchToChallan && (
-                <button
-                  type="button"
-                  onClick={onSwitchToChallan}
-                  className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shrink-0 cursor-pointer"
-                >
-                  Open Challan
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* DIALOG: FACTORY DO ACCEPTANCE CONFIRMATION */}

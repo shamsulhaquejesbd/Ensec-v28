@@ -187,16 +187,7 @@ export const ChallanModal: React.FC<ChallanModalProps> = ({
               </button>
             )}
 
-            {/* Toggle sample scan comparison */}
-            <button
-              type="button"
-              onClick={() => setShowSampleScanComparison(!showSampleScanComparison)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-              title="Compare with uploaded sample scan"
-            >
-              <ImageIcon className="w-3.5 h-3.5" />
-              <span>{showSampleScanComparison ? 'Hide Sample Scan' : 'View Sample Scan'}</span>
-            </button>
+          
 
             {/* Edit Battery Serials */}
             <button

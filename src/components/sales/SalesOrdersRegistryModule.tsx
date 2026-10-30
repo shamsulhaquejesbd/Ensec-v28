@@ -2506,9 +2506,7 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                   <h3 className="text-base font-black text-slate-900 dark:text-white">
                     Factory Review &amp; D.O. Acceptance
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Step 2: Factory in-charge must accept the D.O. before proceeding to battery serial allocation
-                  </p>
+                  
                 </div>
               </div>
               <button
@@ -2602,12 +2600,7 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                 />
               </div>
 
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                <span>
-                  <strong>Strict Workflow Rule:</strong> Challan is <em>NOT</em> generated at this stage. Once you accept this D.O., you will be directed to input the battery unit serial numbers, which will then automatically generate the Challan.
-                </span>
-              </div>
+            
             </div>
 
             {/* Action buttons */}
@@ -2647,9 +2640,7 @@ export const SalesOrdersRegistryModule: React.FC<SalesOrdersRegistryModuleProps>
                   <h3 className="text-base font-black text-slate-900 dark:text-white">
                     Update Battery Serials &amp; Generate Challan
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Step 3: Only after D.O. is accepted and serials are recorded, the system automatically generates the Challan
-                  </p>
+                  
                 </div>
               </div>
               <button
